@@ -1,0 +1,99 @@
+name: coding-factory
+
+# Scheduled + manual factory runs. Each run picks up pending tasks, has the
+# agent implement them in a worktree, verifies them, and opens PRs.
+#
+# Required repo secret:  OPENAI_API_KEY   (for the Codex backend)
+# The default GITHUB_TOKEN must have `contents: write` and `pull-requests: write`.
+#
+# IMPORTANT for auto-merge: GitHub does NOT run workflows triggered by PRs that
+# were opened with the default GITHUB_TOKEN. If you enable FACTORY_AUTO_MERGE,
+# also set a PAT (repo scope) or GitHub App token as the FACTORY_GH_TOKEN secret
+# so the PR's own CI actually runs and reports checks.
+
+on:
+  schedule:
+    - cron: "*/30 * * * *"   # every 30 minutes
+  workflow_dispatch:
+    inputs:
+      backend:
+        description: "Agent backend"
+        default: "codex"
+        type: choice
+        options: [codex, antigravity]
+      max_tasks:
+        description: "Max tasks to process this run"
+        default: "3"
+
+concurrency:
+  group: coding-factory
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+
+jobs:
+  factory:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      FACTORY_BACKEND: ${{ github.event.inputs.backend || 'codex' }}
+      FACTORY_SOURCE: github
+      FACTORY_GITHUB_REPO: ${{ github.repository }}
+      FACTORY_TRIGGER_LABEL: factory
+      FACTORY_BASE_BRANCH: ${{ github.event.repository.default_branch }}
+      FACTORY_REPO: ${{ github.workspace }}
+      FACTORY_WORK_ROOT: ${{ runner.temp }}/factory
+      # Auto-merge is opt-in. Set repository variable FACTORY_AUTO_MERGE=true to
+      # enable it. It only merges after this repo's CI checks report success.
+      FACTORY_AUTO_MERGE: ${{ vars.FACTORY_AUTO_MERGE || 'false' }}
+      FACTORY_MERGE_METHOD: ${{ vars.FACTORY_MERGE_METHOD || 'squash' }}
+      # Prefer a PAT/App token so the PR's own CI runs (see note above); fall
+      # back to the default token when it is not configured.
+      GITHUB_TOKEN: ${{ secrets.FACTORY_GH_TOKEN || secrets.GITHUB_TOKEN }}
+      GH_TOKEN: ${{ secrets.FACTORY_GH_TOKEN || secrets.GITHUB_TOKEN }}
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      # Optional: point at a headless Antigravity entrypoint
+      FACTORY_ANTIGRAVITY_CMD: ${{ vars.FACTORY_ANTIGRAVITY_CMD }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Configure git identity
+        run: |
+          git config user.name  "openhands-factory"
+          git config user.email "factory@users.noreply.github.com"
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install factory
+        run: |
+          # Installed inside the target repo -> editable install.
+          # Installed into a repo that does not contain the factory source ->
+          # pull it from the factory repo (set the FACTORY_REPO_SLUG variable).
+          if [ -d src/factory ]; then
+            pip install -e .
+          else
+            pip install "coding-factory @ git+https://github.com/${{ vars.FACTORY_REPO_SLUG || github.repository }}.git"
+          fi
+
+      - name: Install Codex CLI
+        if: ${{ (github.event.inputs.backend || 'codex') == 'codex' }}
+        run: npm install -g @openai/codex
+
+      - name: Run factory
+        run: |
+          factory run-loop \
+            --backend "$FACTORY_BACKEND" \
+            --max-tasks "${{ github.event.inputs.max_tasks || '3' }}" \
+            --stop-when-empty \
+            --verbose

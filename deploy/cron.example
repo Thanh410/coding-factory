@@ -1,0 +1,7 @@
+# Cron example: process up to 3 tasks every 30 minutes, then exit.
+# Install with:  crontab -e
+#
+# The worker reads credentials from ~/.config/coding-factory.env (chmod 600).
+SHELL=/bin/bash
+PATH=/usr/local/bin:/usr/bin:/bin
+*/30 * * * * . $HOME/.config/coding-factory.env && cd /srv/app && factory run-loop --backend codex --max-tasks 3 --stop-when-empty >> $HOME/.factory/cron.log 2>&1

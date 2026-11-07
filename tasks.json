@@ -1,0 +1,9 @@
+[
+  {
+    "id": "demo-1",
+    "title": "Add a health-check endpoint",
+    "body": "Add GET /health returning {\"status\": \"ok\"} with a test. Follow existing routing conventions.",
+    "labels": ["factory"],
+    "base_branch": "main"
+  }
+]

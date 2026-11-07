@@ -1,0 +1,41 @@
+[Unit]
+Description=24/7 Automated Coding Factory (Codex / Antigravity)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=__REPO_DIR__
+# Secrets: keep these out of the unit file in production. Prefer an
+# EnvironmentFile= with mode 600 owned by the service user, e.g.:
+#   EnvironmentFile=/etc/coding-factory.env
+Environment=FACTORY_REPO=__REPO_DIR__
+Environment=FACTORY_SOURCE=github
+Environment=FACTORY_GITHUB_REPO=owner/name
+Environment=FACTORY_TRIGGER_LABEL=factory
+Environment=FACTORY_BASE_BRANCH=main
+Environment=FACTORY_BACKEND=codex
+Environment=FACTORY_WORK_ROOT=/var/lib/coding-factory
+# Auto-merge is OFF by default. Set to true to merge after this repo's CI passes.
+Environment=FACTORY_AUTO_MERGE=false
+Environment=FACTORY_MERGE_METHOD=squash
+Environment=OPENAI_API_KEY=
+Environment=GITHUB_TOKEN=
+# Optional Antigravity headless entrypoint:
+# Environment=FACTORY_ANTIGRAVITY_CMD=antigravity run --prompt-file -
+
+ExecStart=/usr/bin/env python3 -m factory run-loop --interval 60 --verbose
+Restart=always
+RestartSec=15
+# Never give up; a 24/7 worker should survive transient failures.
+StartLimitIntervalSec=0
+
+# Hardening
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ProtectHome=read-only
+ReadWritePaths=/var/lib/coding-factory
+
+[Install]
+WantedBy=multi-user.target
