@@ -1,0 +1,82 @@
+name: monitor
+
+# Production monitors: poll Sentry for unresolved errors and probe an uptime URL,
+# then open a `factory` issue for anything new. The coding-factory workflow picks
+# those issues up and opens PRs. That closes the loop:
+#
+#   production error -> issue -> agent fix -> PR -> staging -> approval -> prod
+#
+# Dedup is by a marker in the issue body, so a recurring error or a flapping
+# endpoint does not open a new issue every run. Closing the issue lets a still-
+# broken signal reopen it.
+#
+# Required (at least one of):
+#   SENTRY_AUTH_TOKEN  - Sentry API token; with SENTRY_ORG + SENTRY_PROJECT
+#   UPTIME_URL         - endpoint to probe
+# Required for issue creation:
+#   FACTORY_GH_TOKEN   - a PAT/App token with `issues: write` (the default
+#                        GITHUB_TOKEN cannot open issues from a scheduled run in
+#                        every configuration; a PAT is the safe choice)
+# Optional:
+#   SENTRY_BASE_URL, SENTRY_QUERY, SENTRY_STATS_PERIOD, SENTRY_LIMIT
+#   UPTIME_EXPECT_STATUS (default 200), UPTIME_TIMEOUT (default 10)
+#   FACTORY_MONITOR_LABEL (default "factory")
+
+on:
+  schedule:
+    - cron: "*/30 * * * *"   # every 30 minutes
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Print what would be opened without creating issues"
+        type: boolean
+        default: false
+
+concurrency:
+  group: monitor
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  monitor:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      FACTORY_GITHUB_REPO: ${{ github.repository }}
+      FACTORY_MONITOR_LABEL: ${{ vars.FACTORY_MONITOR_LABEL || 'factory' }}
+      # Prefer a PAT/App token so issues are created reliably and are attributed
+      # to the app, not the ephemeral Actions token.
+      GITHUB_TOKEN: ${{ secrets.FACTORY_GH_TOKEN || secrets.GITHUB_TOKEN }}
+      SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
+      SENTRY_ORG: ${{ vars.SENTRY_ORG }}
+      SENTRY_PROJECT: ${{ vars.SENTRY_PROJECT }}
+      SENTRY_BASE_URL: ${{ vars.SENTRY_BASE_URL }}
+      SENTRY_QUERY: ${{ vars.SENTRY_QUERY }}
+      SENTRY_STATS_PERIOD: ${{ vars.SENTRY_STATS_PERIOD }}
+      SENTRY_LIMIT: ${{ vars.SENTRY_LIMIT }}
+      UPTIME_URL: ${{ vars.UPTIME_URL }}
+      UPTIME_EXPECT_STATUS: ${{ vars.UPTIME_EXPECT_STATUS }}
+      UPTIME_TIMEOUT: ${{ vars.UPTIME_TIMEOUT }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install factory
+        run: pip install -e .
+
+      - name: Run monitors
+        run: |
+          if [ "${{ github.event.inputs.dry_run }}" = "true" ]; then
+            factory monitor --dry-run --verbose
+          else
+            factory monitor --verbose
+          fi

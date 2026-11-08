@@ -1,35 +1,46 @@
 ---
 name: monitor-errors
-description: Watch production for errors, latency, and uptime regressions, triage alerts, and turn confirmed defects into tracked GitHub issues. Use for production monitoring, incident triage, and closing the loop from alert to fix.
+description: Watch production for errors and downtime, and turn each new one into a factory issue. Use when setting up production monitoring, when triaging a spike in errors, or when an uptime probe is failing.
 ---
 
 # Monitor production
 
-Keep the product healthy and turn incidents into tracked work. Restore service
-first; root-cause after.
+Close the loop: production signal → issue → fix → PR → deploy. The `monitor`
+command polls Sentry and an uptime URL, dedups against open issues, and opens a
+`factory`-labeled issue for anything new. The coding-factory workflow then treats
+that issue as a task.
 
-## 1. Watch
+## Procedure
 
-- Errors and traces: Sentry (or the project's error sink) for new/rising issues.
-- Uptime and latency: an uptime check on the primary routes and the AI endpoint.
-- Deploys: correlate a new error burst with the last production deploy.
+1. Configure at least one source (see `deploy/monitoring/README.md`):
+   ```bash
+   export SENTRY_AUTH_TOKEN=... SENTRY_ORG=acme SENTRY_PROJECT=web
+   export UPTIME_URL=https://app.example.com/health
+   export FACTORY_GITHUB_REPO=owner/name GITHUB_TOKEN=...
+   ```
+2. Dry-run to see what would be opened, without creating anything:
+   ```bash
+   factory monitor --dry-run
+   ```
+3. Run it for real (the `monitor` workflow does this every 30 minutes):
+   ```bash
+   factory monitor
+   ```
 
-## 2. Triage
+## Rules
 
-For each alert, decide: real incident, known issue, or noise (cold start, a
-single flaky request). Establish the blast radius and the first-seen time.
+- **One issue per signal.** Dedup is by a marker in the issue body. Do not strip
+  the marker, and do not open a second issue for the same Sentry id or URL.
+- **A fixed error must be closed.** Closing the issue clears its key, so if the
+  error recurs the monitor reopens it. Do not leave fixed issues open — they
+  hide the next occurrence.
+- **Do not let monitors page a human directly.** They open issues; triage happens
+  in the issue, and severity is decided there.
+- **Keep the trigger label in sync.** `FACTORY_MONITOR_LABEL` must match
+  `FACTORY_TRIGGER_LABEL` in the factory workflow, or issues never get picked up.
 
-- If a deploy correlates, consider rollback as the first mitigation.
-- Reproduce with the smallest steps; capture request/response and stack evidence.
+## Triage
 
-## 3. Close the loop
-
-- For a confirmed defect, open a GitHub issue labeled `factory` with: symptom,
-  reproduction, evidence, environment, and suspected owner file.
-- The harness picks up `factory`-labeled issues and drives the fix.
-- Do not edit application source, push, or merge from this role.
-
-## Deliver
-
-Incident notes, the `factory`-labeled issue (or the decision that it is noise),
-and the mitigation or rollback taken.
+For each monitor issue: reproduce, decide severity, then either fix (let the
+factory open a PR) or close it as transient with a note. A recurring error that
+keeps reopening is a real bug — fix the root cause, do not silence the monitor.
