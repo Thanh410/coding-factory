@@ -1,0 +1,14 @@
+{
+  "id": "fix-bug",
+  "title": "Fix the off-by-one in add()",
+  "body": "`calc.py` defines `add(a, b)` but it returns `a + b + 1` (an off-by-one bug). Fix it so `add(2, 3) == 5`. Keep the change minimal.",
+  "seed_files": {
+    "calc.py": "def add(a, b):\n    return a + b + 1\n",
+    "test_calc.py": "from calc import add\n\n\ndef test_add():\n    assert add(2, 3) == 5\n"
+  },
+  "checks": "python -m pytest -q",
+  "expect": {
+    "state": "pr_open",
+    "files_changed_contains": ["calc.py"]
+  }
+}
