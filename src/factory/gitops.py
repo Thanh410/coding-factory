@@ -66,6 +66,16 @@ def has_changes(worktree: Path) -> bool:
     return bool(changed_files(worktree))
 
 
+def discard_changes(worktree: Path) -> None:
+    """Reset the worktree to HEAD and drop untracked files.
+
+    Used after the read-only spec pass so the coding stage starts from a clean
+    tree even if the architect agent left files behind.
+    """
+    run(["git", "reset", "--hard", "HEAD"], cwd=worktree, timeout=120)
+    run(["git", "clean", "-fd"], cwd=worktree, timeout=120)
+
+
 def commit_all(settings: Settings, worktree: Path, message: str) -> str:
     _git(settings, ["add", "-A"], cwd=worktree)
     code, out = run(
