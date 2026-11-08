@@ -310,3 +310,118 @@ def test_engine_stays_open_when_ci_not_green(tmp_path, monkeypatch):
     assert task.merged is False
     assert "auto-merge deferred" in task.detail
     store.close()
+
+
+# --------------------------------------------------------------------------- #
+# Spec stage (architect pass)
+# --------------------------------------------------------------------------- #
+def test_extract_plan_prefers_marker():
+    from factory.engine import _extract_plan
+
+    assert _extract_plan("blah\nPLAN:\n- change a.py\n- test b") == "- change a.py\n- test b"
+    assert _extract_plan("no marker here") == "no marker here"
+    assert _extract_plan("") == ""
+
+
+def test_prompt_includes_plan_when_present():
+    t = Task(external_id="x", title="t")
+    assert "PLAN (from the spec stage)" not in prompt.build_prompt(t, checks=[])
+    with_plan = prompt.build_prompt(t, checks=[], spec="- edit a.py")
+    assert "PLAN (from the spec stage)" in with_plan
+    assert "- edit a.py" in with_plan
+
+
+def test_spec_prompt_is_read_only():
+    t = Task(external_id="x", title="Do it", body="details")
+    text = prompt.build_spec_prompt(t, checks=["pytest -q"])
+    assert "Do it" in text
+    assert "read-only reconnaissance" in text
+    assert "pytest -q" in text
+
+
+@adapters.register("fake_spec")
+class _FakeSpecAdapter(adapters.AgentAdapter):
+    """Returns a plan on the spec pass and writes code on the coding pass."""
+
+    name = "fake_spec"
+
+    def run(self, task: Task, worktree: Path, prompt: str) -> AgentResult:
+        if "read-only reconnaissance" in prompt:
+            # Simulate a messy architect that leaves a scratch file behind.
+            (worktree / "scratch.txt").write_text("should be discarded\n")
+            return AgentResult(ok=True, summary="analysis\nPLAN:\n- create generated.txt")
+        assert "- create generated.txt" in prompt  # plan was handed to the coder
+        (worktree / "generated.txt").write_text("hello from the agent\n")
+        return AgentResult(ok=True, summary="SUMMARY: wrote generated.txt")
+
+
+def test_engine_spec_stage_plans_then_codes(tmp_path, monkeypatch):
+    _remote, seed = _init_repo(tmp_path)
+    monkeypatch.setenv("FACTORY_CHECKS", "test -f generated.txt")
+    monkeypatch.setattr(
+        "factory.engine.pr_mod.create_pr",
+        lambda **kw: PullRequest(url="https://example.test/pr/2", number=2),
+    )
+
+    settings = Settings(
+        repo=seed,
+        remote="origin",
+        base_branch="main",
+        work_root=tmp_path / "work",
+        db_path=tmp_path / "work" / "state.db",
+        branch_prefix="factory/",
+        git_author_name="factory",
+        git_author_email="f@f",
+        max_repairs=1,
+        task_timeout_seconds=120,
+        agent_timeout_seconds=120,
+        spec_stage=True,
+    )
+    settings.ensure_dirs()
+    store = Store(settings.db_path)
+    task = Task(external_id="spec-1", title="Add a file")
+    store.upsert(task)
+
+    Engine(settings, store, "fake_spec").process(task)
+
+    assert task.state is TaskState.PR_OPEN, task.detail
+    assert task.spec == "- create generated.txt"
+    # The plan was persisted.
+    assert store.get("spec-1").spec == "- create generated.txt"
+    store.close()
+
+
+def test_engine_spec_stage_disabled(tmp_path, monkeypatch):
+    _remote, seed = _init_repo(tmp_path)
+    monkeypatch.setenv("FACTORY_CHECKS", "test -f generated.txt")
+    monkeypatch.setattr(
+        "factory.engine.pr_mod.create_pr",
+        lambda **kw: PullRequest(url="https://example.test/pr/3", number=3),
+    )
+
+    settings = Settings(
+        repo=seed,
+        remote="origin",
+        base_branch="main",
+        work_root=tmp_path / "work",
+        db_path=tmp_path / "work" / "state.db",
+        branch_prefix="factory/",
+        git_author_name="factory",
+        git_author_email="f@f",
+        max_repairs=1,
+        task_timeout_seconds=120,
+        agent_timeout_seconds=120,
+        spec_stage=False,
+    )
+    settings.ensure_dirs()
+    store = Store(settings.db_path)
+    task = Task(external_id="spec-2", title="No plan")
+    store.upsert(task)
+
+    # fake_spec asserts a plan is in the coding prompt; with the stage off there
+    # is none, so use the plain fake adapter instead.
+    Engine(settings, store, "fake").process(task)
+
+    assert task.state is TaskState.PR_OPEN, task.detail
+    assert task.spec == ""
+    store.close()
