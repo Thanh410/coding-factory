@@ -176,4 +176,25 @@ Production adds a `production` Environment with required reviewers and a
 > leaks, revoke it and re-issue it — see `deploy/vercel/README.md`. Keep the
 > production token separate from staging.
 
+## Monitoring: errors and uptime become issues
+
+`monitor.yml` polls production every 30 minutes and opens a `factory`-labeled
+issue for each **new** Sentry error or uptime failure. The factory then picks
+those issues up like any other task, closing the loop:
+
+```text
+Sentry error / uptime failure ──▶ issue (label: factory) ──▶ agent fix ──▶ PR
+```
+
+```bash
+export SENTRY_AUTH_TOKEN=... SENTRY_ORG=acme SENTRY_PROJECT=web   # Sentry
+export UPTIME_URL=https://app.example.com/health                 # uptime
+factory monitor --dry-run     # print what would be opened
+factory monitor               # open the issues
+```
+
+Dedup is by a marker in the issue body, so a recurring error does not open a new
+issue every run; closing the issue lets a still-broken signal reopen it. Setup is
+in `deploy/monitoring/README.md`.
+
 _Automation built with OpenHands._

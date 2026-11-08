@@ -32,6 +32,9 @@ backend) inside an isolated git worktree.
 - `src/factory/runner.py`  - continuous loop + one-shot runner.
 - `src/factory/state.py`   - SQLite queue (durable, dedupes by external_id).
 - `src/factory/checks.py`  - convention-based check discovery; override with `FACTORY_CHECKS`.
+- `src/factory/monitor.py` - production monitors: poll Sentry + an uptime URL and
+  open `factory` issues for anything new (dedup by a marker in the issue body).
+  Closes the loop: production error -> issue -> fix -> PR. `factory monitor`.
 - `deploy/`, `.github/workflows/` - 24/7 deployment targets (systemd, cron, Actions).
 
 ## Testing notes
@@ -41,6 +44,8 @@ backend) inside an isolated git worktree.
 - LLM-provider tests (`tests/test_llm_provider.py`) start a real local HTTP server
   that speaks the OpenAI chat-completions protocol, so the client path is exercised
   end to end without any network or API key.
+- Monitor tests (`tests/test_monitor.py`) likewise run a local HTTP server that
+  stands in for Sentry and the GitHub API.
 
 ## Gotchas
 - `StrEnum` requires Python 3.11+.
