@@ -34,7 +34,7 @@ def build(name: str, **kwargs) -> AgentAdapter:
 
 def _load_builtins() -> None:
     # Import for side effects (registration).
-    from . import antigravity, codex  # noqa: F401
+    from . import antigravity, codex, llm  # noqa: F401
 
 
 class AgentAdapter(abc.ABC):

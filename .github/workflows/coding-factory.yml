@@ -4,6 +4,7 @@ name: coding-factory
 # agent implement them in a worktree, verifies them, and opens PRs.
 #
 # Required repo secret:  OPENAI_API_KEY   (for the Codex backend)
+# For the `llm` backend, set OPENROUTER_API_KEY and/or GEMINI_API_KEY instead.
 # The default GITHUB_TOKEN must have `contents: write` and `pull-requests: write`.
 #
 # IMPORTANT for auto-merge: GitHub does NOT run workflows triggered by PRs that
@@ -20,7 +21,7 @@ on:
         description: "Agent backend"
         default: "codex"
         type: choice
-        options: [codex, antigravity]
+        options: [codex, antigravity, llm]
       max_tasks:
         description: "Max tasks to process this run"
         default: "3"
@@ -55,6 +56,13 @@ jobs:
       GITHUB_TOKEN: ${{ secrets.FACTORY_GH_TOKEN || secrets.GITHUB_TOKEN }}
       GH_TOKEN: ${{ secrets.FACTORY_GH_TOKEN || secrets.GITHUB_TOKEN }}
       OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      # LLM provider chain (used when backend == llm). Unconfigured providers
+      # are skipped, so only set the keys you actually have.
+      OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+      GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+      # Default is $0: Gemini free tier first, then OpenRouter free models,
+      # then a local Ollama fallback. `free` needs OpenRouter privacy enabled.
+      FACTORY_LLM_CHAIN: ${{ vars.FACTORY_LLM_CHAIN || 'gemini,free,ollama' }}
       # Optional: point at a headless Antigravity entrypoint
       FACTORY_ANTIGRAVITY_CMD: ${{ vars.FACTORY_ANTIGRAVITY_CMD }}
 

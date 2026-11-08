@@ -57,6 +57,7 @@ def build_parser() -> argparse.ArgumentParser:
     e.add_argument("--label", action="append", default=[])
 
     sub.add_parser("backends", help="list available agent backends")
+    sub.add_parser("models", help="list curated free models (and their availability)")
     return p
 
 
@@ -119,6 +120,26 @@ def cmd_backends(_: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_models(_: argparse.Namespace) -> int:
+    """List the curated $0 tool-capable models and how to use them."""
+    from . import providers
+
+    configured = providers.resolve("openrouter") is not None
+    print("Free models (OpenRouter, $0, tool calling supported):\n")
+    for model in providers.FREE_MODELS:
+        print(f"  {model}")
+    print(
+        "\nUse them with a chain alias (needs OPENROUTER_API_KEY):\n"
+        "  export FACTORY_BACKEND=llm\n"
+        "  export FACTORY_LLM_CHAIN=free          # all of the above, in order\n"
+        "  export FACTORY_LLM_CHAIN=free:3        # just the top 3\n"
+        "  export FACTORY_LLM_CHAIN=free,ollama   # free first, then local Ollama\n"
+    )
+    print(f"OPENROUTER_API_KEY set: {configured}")
+    print("Tip: `factory backends` shows whether the llm backend is available.")
+    return 0
+
+
 def _default_backend() -> str:
     import os
 
@@ -134,6 +155,7 @@ def main(argv: list[str] | None = None) -> int:
         "status": cmd_status,
         "enqueue": cmd_enqueue,
         "backends": cmd_backends,
+        "models": cmd_models,
     }
     return handlers[args.cmd](args)
 

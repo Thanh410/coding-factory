@@ -14,12 +14,18 @@ Environment=FACTORY_SOURCE=github
 Environment=FACTORY_GITHUB_REPO=owner/name
 Environment=FACTORY_TRIGGER_LABEL=factory
 Environment=FACTORY_BASE_BRANCH=main
+# codex | antigravity | llm
 Environment=FACTORY_BACKEND=codex
+# LLM provider chain (only used when FACTORY_BACKEND=llm).
+Environment=FACTORY_LLM_CHAIN=openrouter,gemini,ollama
 Environment=FACTORY_WORK_ROOT=/var/lib/coding-factory
 # Auto-merge is OFF by default. Set to true to merge after this repo's CI passes.
 Environment=FACTORY_AUTO_MERGE=false
 Environment=FACTORY_MERGE_METHOD=squash
 Environment=OPENAI_API_KEY=
+# LLM provider keys (only those in FACTORY_LLM_CHAIN are needed).
+Environment=OPENROUTER_API_KEY=
+Environment=GEMINI_API_KEY=
 Environment=GITHUB_TOKEN=
 # Optional Antigravity headless entrypoint:
 # Environment=FACTORY_ANTIGRAVITY_CMD=antigravity run --prompt-file -
