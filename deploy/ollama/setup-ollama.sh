@@ -14,7 +14,9 @@
 #   export OLLAMA_MODEL=qwen2.5:3b
 set -euo pipefail
 
-MODEL="qwen2.5:3b"
+if [ -z "${MODEL}" ]; then
+  MODEL="qwen2.5:3b"
+fi
 
 echo ">> installing Ollama"
 if command -v ollama >/dev/null 2>&1; then
