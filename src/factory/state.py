@@ -28,6 +28,7 @@ CREATE TABLE IF NOT EXISTS tasks (
     pr_number   INTEGER NOT NULL DEFAULT 0,
     merged      INTEGER NOT NULL DEFAULT 0,
     detail      TEXT NOT NULL DEFAULT '',
+    spec        TEXT NOT NULL DEFAULT '',
     updated_at  REAL NOT NULL
 );
 """
@@ -50,6 +51,7 @@ class Store:
         additions = {
             "pr_number": "INTEGER NOT NULL DEFAULT 0",
             "merged": "INTEGER NOT NULL DEFAULT 0",
+            "spec": "TEXT NOT NULL DEFAULT ''",
         }
         for column, ddl in additions.items():
             if column not in existing:
@@ -66,8 +68,8 @@ class Store:
         self.conn.execute(
             """INSERT INTO tasks
                (external_id,title,body,repo_url,base_branch,labels,state,attempts,
-                branch,pr_url,pr_number,merged,detail,updated_at)
-               VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                branch,pr_url,pr_number,merged,detail,spec,updated_at)
+               VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
             (
                 task.external_id,
                 task.title,
@@ -82,6 +84,7 @@ class Store:
                 task.pr_number,
                 int(task.merged),
                 task.detail,
+                task.spec,
                 time.time(),
             ),
         )
@@ -91,7 +94,8 @@ class Store:
     def save(self, task: Task) -> None:
         self.conn.execute(
             """UPDATE tasks
-               SET state=?,attempts=?,branch=?,pr_url=?,pr_number=?,merged=?,detail=?,updated_at=?
+               SET state=?,attempts=?,branch=?,pr_url=?,pr_number=?,merged=?,
+                   detail=?,spec=?,updated_at=?
                WHERE external_id=?""",
             (
                 task.state.value,
@@ -101,6 +105,7 @@ class Store:
                 task.pr_number,
                 int(task.merged),
                 task.detail,
+                task.spec,
                 time.time(),
                 task.external_id,
             ),
@@ -146,4 +151,5 @@ def _row_to_task(row: sqlite3.Row) -> Task:
         pr_number=row["pr_number"],
         merged=bool(row["merged"]),
         detail=row["detail"],
+        spec=row["spec"],
     )

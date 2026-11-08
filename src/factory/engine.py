@@ -1,8 +1,9 @@
 """The factory engine: drives one task from intake to an open (optionally
 auto-merged) pull request.
 
-Pipeline:  prepare worktree -> agent run -> verify -> (repair loop) ->
-           commit -> push -> open PR -> [wait for CI -> merge] -> record state.
+Pipeline:  prepare worktree -> spec pass (architect) -> agent run -> verify ->
+           (repair loop) -> commit -> push -> open PR -> [wait for CI -> merge]
+           -> record state.
 """
 
 from __future__ import annotations
@@ -17,7 +18,7 @@ from . import pr as pr_mod
 from .adapters import base as adapters
 from .config import Settings
 from .models import Task, TaskState
-from .prompt import build_prompt
+from .prompt import build_prompt, build_spec_prompt
 from .state import Store
 
 log = logging.getLogger("factory.engine")
@@ -62,12 +63,22 @@ class Engine:
         worktree = gitops.prepare_worktree(self.settings, branch)
 
         check_list = [cmd for _, cmd in checks_mod.detect_checks(worktree)]
+
+        if self.settings.spec_stage:
+            self._spec(task, worktree, check_list)
+
         feedback = ""
         result = None
 
         for attempt in range(1, self.settings.max_repairs + 2):
             task.attempts = attempt
-            prompt = build_prompt(task, checks=check_list, repairs=attempt - 1, feedback=feedback)
+            prompt = build_prompt(
+                task,
+                checks=check_list,
+                spec=task.spec,
+                repairs=attempt - 1,
+                feedback=feedback,
+            )
             result = self.agent.run(task, worktree, prompt)
 
             if not result.ok:
@@ -95,6 +106,34 @@ class Engine:
             f"verification failed after {self.settings.max_repairs + 1} attempt(s).\n"
             + (feedback[:2000] if feedback else "no details")
         )
+
+    def _spec(self, task: Task, worktree, check_list: list[str]) -> None:
+        """Run a read-only architect pass and capture the plan.
+
+        The plan is handed to the coding agent. A failed or empty spec is not
+        fatal: the task proceeds without a plan rather than blocking.
+        """
+        prompt = build_spec_prompt(task, checks=check_list)
+        result = self.agent.run(task, worktree, prompt)
+        # The pass must be read-only; drop anything it left behind regardless.
+        gitops.discard_changes(worktree)
+
+        if not result.ok:
+            log.warning(
+                "spec stage failed for %s (exit=%s); continuing without a plan",
+                task.external_id,
+                result.exit_code,
+            )
+            return
+
+        plan = _extract_plan(result.summary)
+        if not plan:
+            log.warning("spec stage produced no plan for %s", task.external_id)
+            return
+
+        task.spec = plan
+        self.store.save(task)
+        log.info("spec stage produced a plan for %s (%d chars)", task.external_id, len(plan))
 
     def _ship(self, task: Task, worktree, result, check_results) -> None:
         diff_stat = gitops.diff_stat(worktree)
@@ -179,3 +218,19 @@ class Engine:
             "Opened by the 24/7 coding factory."
         )
         return f"{header}\n\n{body}"
+
+
+def _extract_plan(summary: str) -> str:
+    """Pull the plan out of a spec-stage summary.
+
+    Prefers the text after a ``PLAN:`` marker; falls back to the whole summary so
+    a plan without the marker is still used.
+    """
+    text = (summary or "").strip()
+    if not text:
+        return ""
+    marker = "PLAN:"
+    idx = text.rfind(marker)
+    if idx != -1:
+        return text[idx + len(marker):].strip()
+    return text

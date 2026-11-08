@@ -23,8 +23,46 @@ Rules:
   what changed, how you verified it, and any follow-ups.
 """
 
+_SPEC_SYSTEM = """\
+You are an autonomous software architect working inside a git worktree. Your job
+is to PLAN, not to implement. Read the code that owns the behavior, then produce a
+concrete implementation plan for the task below.
 
-def build_prompt(task: Task, *, checks: list[str], repairs: int = 0, feedback: str = "") -> str:
+Rules:
+- Do NOT modify, create, or delete any file. This is a read-only reconnaissance pass.
+- Identify the single owning file per concern; name the exact files to change.
+- Reuse existing helpers, clients, and conventions; call out anything new.
+- Define the interfaces (types, props, API shape) and the test seams.
+- State risks, migrations, and what is explicitly out of scope.
+- If the task is ambiguous, say so and list the open questions instead of guessing.
+- End your final message with a section titled "PLAN:" containing the plan as
+  short bullet points (files to change, interfaces, test plan, risks).
+"""
+
+
+def build_spec_prompt(task: Task, *, checks: list[str]) -> str:
+    """Compose the read-only planning prompt for the spec stage (architect)."""
+    parts = [_SPEC_SYSTEM, "\n# TASK", f"Title: {task.title}"]
+    if task.external_id:
+        parts.append(f"Reference: {task.external_id}")
+    if task.body.strip():
+        parts.append("\nDescription:\n" + task.body.strip())
+    if task.labels:
+        parts.append("\nLabels: " + ", ".join(task.labels))
+    if checks:
+        parts.append("\n# CHECKS THE IMPLEMENTATION MUST PASS")
+        parts.extend(f"- {c}" for c in checks)
+    return "\n".join(parts) + "\n"
+
+
+def build_prompt(
+    task: Task,
+    *,
+    checks: list[str],
+    spec: str = "",
+    repairs: int = 0,
+    feedback: str = "",
+) -> str:
     """Compose the full prompt handed to the agent for one attempt."""
     parts = [_SYSTEM, "\n# TASK", f"Title: {task.title}"]
     if task.external_id:
@@ -33,6 +71,13 @@ def build_prompt(task: Task, *, checks: list[str], repairs: int = 0, feedback: s
         parts.append("\nDescription:\n" + task.body.strip())
     if task.labels:
         parts.append("\nLabels: " + ", ".join(task.labels))
+
+    if spec.strip():
+        parts.append(
+            "\n# PLAN (from the spec stage)\n"
+            "Follow this plan; deviate only if the code proves it wrong, and say why.\n\n"
+            f"{spec.strip()}"
+        )
 
     if checks:
         parts.append("\n# REQUIRED CHECKS (must pass)")
