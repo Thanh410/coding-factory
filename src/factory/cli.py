@@ -71,6 +71,29 @@ def build_parser() -> argparse.ArgumentParser:
         default=0.0,
         help="exit non-zero when the pass-rate is below this (0..1)",
     )
+    ev.add_argument(
+        "--record",
+        action="store_true",
+        help="append this run to the pass-rate history (see `factory dashboard`)",
+    )
+    ev.add_argument(
+        "--history",
+        default="evals/history.json",
+        help="history file to append to with --record (default evals/history.json)",
+    )
+
+    dash = sub.add_parser("dashboard", help="render the pass-rate history as an HTML page")
+    _common(dash)
+    dash.add_argument(
+        "--history",
+        default="evals/history.json",
+        help="history file produced by `factory eval --record`",
+    )
+    dash.add_argument(
+        "--out",
+        default="dashboard/index.html",
+        help="where to write the HTML page (default dashboard/index.html)",
+    )
 
     mon = sub.add_parser("monitor", help="poll Sentry/uptime and open factory issues")
     _common(mon)
@@ -180,13 +203,40 @@ def cmd_eval(args: argparse.Namespace) -> int:
         return 2
 
     result = eval_mod.run_suite(cases, backend)
+    report = eval_mod.as_dict(result)
     if args.json:
-        print(json.dumps(eval_mod.as_dict(result), indent=2, sort_keys=True))
+        print(json.dumps(report, indent=2, sort_keys=True))
     else:
         print(eval_mod.format_report(result))
+    if args.record:
+        from pathlib import Path
+
+        from . import dashboard as dash_mod
+
+        dash_mod.append_history(
+            Path(args.history), dash_mod.run_record(report, backend=backend)
+        )
+        print(f"recorded run in {args.history}")
     if result.pass_rate < args.min_pass_rate:
         print(f"pass-rate {result.pass_rate:.0%} is below the required {args.min_pass_rate:.0%}")
         return 1
+    return 0
+
+
+def cmd_dashboard(args: argparse.Namespace) -> int:
+    """Render the eval history as a static HTML page."""
+    from pathlib import Path
+
+    from . import dashboard as dash_mod
+
+    runs = dash_mod.load_history(Path(args.history))
+    if not runs:
+        print(f"no runs in {args.history}; run `factory eval --record` first")
+        return 2
+    out = Path(args.out)
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(dash_mod.render_dashboard(runs), encoding="utf-8")
+    print(f"wrote {out} ({len(runs)} run(s))")
     return 0
 
 
@@ -219,6 +269,7 @@ def main(argv: list[str] | None = None) -> int:
         "backends": cmd_backends,
         "models": cmd_models,
         "eval": cmd_eval,
+        "dashboard": cmd_dashboard,
         "monitor": cmd_monitor,
     }
     return handlers[args.cmd](args)

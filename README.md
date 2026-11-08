@@ -190,6 +190,20 @@ case's files; PR creation is stubbed, so no GitHub auth is needed. Cases live in
 workflow runs the suite; set the `FACTORY_EVAL_MIN_PASS_RATE` repository variable
 to gate merges on it.
 
+## Dashboard: pass-rate over time
+
+Record each run and render a self-contained HTML page (inline SVG, no CDN):
+
+```bash
+factory eval --backend llm --record --history evals/history.json
+factory dashboard --history evals/history.json --out dashboard/index.html
+```
+
+The `dashboard` workflow runs the suite daily, appends a point to
+`evals/history.json`, and publishes the page to GitHub Pages (`gh-pages`), so you
+can see at a glance whether the pipeline is getting better or worse. One-time
+setup: Settings → Pages → Source = *Deploy from a branch*, branch `gh-pages`.
+
 ## Monitoring: errors and uptime become issues
 
 `monitor.yml` polls production every 30 minutes and opens a `factory`-labeled

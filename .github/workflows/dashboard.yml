@@ -1,0 +1,96 @@
+name: dashboard
+
+# Run the golden-task evals, record the pass-rate, and publish a dashboard to
+# GitHub Pages. History lives in `history.json` on the `gh-pages` branch, so each
+# run appends one point and the page shows the trend over time.
+#
+# One-time setup: Settings -> Pages -> Source = "Deploy from a branch",
+# Branch = `gh-pages` / root. The first run creates the branch.
+#
+# Needs a working LLM backend in CI (GEMINI_API_KEY or OPENROUTER_API_KEY). If no
+# key is set the eval step is skipped and the dashboard is rebuilt from history.
+
+on:
+  schedule:
+    - cron: "0 7 * * *"   # daily 07:00 UTC
+  workflow_dispatch:
+    inputs:
+      backend:
+        description: "Agent backend"
+        default: "llm"
+        type: choice
+        options: [llm, codex, antigravity]
+
+permissions:
+  contents: write   # push the gh-pages branch
+
+concurrency:
+  group: dashboard
+  cancel-in-progress: false
+
+jobs:
+  dashboard:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      FACTORY_BACKEND: ${{ github.event.inputs.backend || 'llm' }}
+      FACTORY_LLM_CHAIN: ${{ vars.FACTORY_LLM_CHAIN || 'gemini,free,ollama' }}
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+      GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install factory
+        run: pip install -e ".[dev]"
+
+      - name: Install Codex CLI
+        if: ${{ (github.event.inputs.backend || 'llm') == 'codex' }}
+        run: npm install -g @openai/codex
+
+      - name: Restore history from gh-pages
+        run: |
+          mkdir -p evals
+          if git fetch --depth 1 origin gh-pages 2>/dev/null; then
+            git show origin/gh-pages/history.json > evals/history.json 2>/dev/null \
+              || echo "[]" > evals/history.json
+          else
+            echo "[]" > evals/history.json
+          fi
+
+      - name: Run evals and record
+        continue-on-error: true
+        run: |
+          factory eval \
+            --backend "$FACTORY_BACKEND" \
+            --suite evals/cases \
+            --record \
+            --history evals/history.json \
+            --verbose
+
+      - name: Render dashboard
+        run: |
+          factory dashboard --history evals/history.json --out _site/index.html
+          cp evals/history.json _site/history.json
+          touch _site/.nojekyll
+
+      - name: Publish to gh-pages
+        run: |
+          cd _site
+          git init -b gh-pages
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "dashboard: update pass-rate [skip ci]"
+          git push --force \
+            "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" \
+            gh-pages

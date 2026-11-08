@@ -23,6 +23,12 @@ through the real engine and compare the pass-rate to the last known value.
    factory eval --backend llm --min-pass-rate 0.8
    ```
    Exit code is non-zero when the pass-rate is below the floor.
+5. To track the number over time, record the run and refresh the dashboard:
+   ```bash
+   factory eval --backend llm --record --history evals/history.json
+   factory dashboard --history evals/history.json --out dashboard/index.html
+   ```
+   The `dashboard` workflow does this daily and publishes to GitHub Pages.
 
 ## Rules
 
