@@ -56,6 +56,9 @@ class Settings:
     ci_timeout_seconds: int = 1800
     ci_poll_seconds: int = 20
     require_checks: bool = True
+    # Spec stage: an architect pass (read-only) runs before coding and its plan
+    # is handed to the coding agent. ON by default; disable with FACTORY_SPEC_STAGE=false.
+    spec_stage: bool = True
 
     @classmethod
     def from_env(cls) -> Settings:
@@ -79,6 +82,7 @@ class Settings:
             ci_timeout_seconds=_int_env("FACTORY_CI_TIMEOUT", 1800),
             ci_poll_seconds=_int_env("FACTORY_CI_POLL", 20),
             require_checks=_bool_env("FACTORY_REQUIRE_CHECKS", True),
+            spec_stage=_bool_env("FACTORY_SPEC_STAGE", True),
         )
 
     def ensure_dirs(self) -> None:

@@ -43,7 +43,11 @@ lifecycle of such an app, not just "open a PR".
   Unconfigured providers are skipped; failures fall through to the next one.
   The `free` chain alias expands to `FREE_MODELS` (OpenRouter $0, tool-capable);
   refresh that list from the live /models API when OpenRouter rotates it.
-- `src/factory/engine.py`  - per-task orchestration (worktree -> agent -> verify -> PR -> auto-merge).
+- `src/factory/engine.py`  - per-task orchestration (worktree -> spec pass -> agent -> verify -> PR -> auto-merge).
+  The spec pass (`_spec`) is a read-only architect step, gated by
+  `FACTORY_SPEC_STAGE` (on by default); its plan is stored on the task and handed
+  to the coding agent. The pass must not leave files behind - `gitops.discard_changes`
+  resets the worktree after it.
 - `src/factory/automerge.py` - CI-gated merge; opt-in via `FACTORY_AUTO_MERGE`; fail-closed
   classification (`classify`) is pure and unit-tested. Never merges on fail/pending/timeout.
 - `src/factory/runner.py`  - continuous loop + one-shot runner.

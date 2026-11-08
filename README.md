@@ -6,10 +6,14 @@ backends: OpenAI Codex (default), Google Antigravity, and a built-in `llm`
 backend with a provider fallback chain (OpenRouter, Gemini, or a local Ollama).
 
 ```
-task source -> SQLite queue -> agent (Codex/Antigravity/llm) -> checks -> commit -> push -> PR -> [wait for CI -> auto-merge]
-                    ^                                                        |
-                    +----------------- repair loop ---------------------------+
+task source -> SQLite queue -> spec pass (architect, read-only) -> agent (Codex/Antigravity/llm) -> checks -> commit -> push -> PR -> [wait for CI -> auto-merge]
+                    ^                                                                              |
+                    +------------------------------ repair loop ------------------------------------+
 ```
+
+The **spec pass** is a read-only planning step: the agent reads the code and
+returns a plan, which is handed to the coding agent. It is on by default and can
+be turned off with `FACTORY_SPEC_STAGE=false`.
 
 ## Why it is built this way
 
@@ -142,6 +146,25 @@ Ollama listens on `127.0.0.1:11434` by default. To reach it from another machine
 | `OLLAMA_BASE_URL` | `http://127.0.0.1:11434/v1` | Ollama endpoint |
 | `FACTORY_LLM_MAX_STEPS` | `30` | max tool-call rounds per run |
 | `FACTORY_LLM_MAX_TOKENS` | `4096` | max tokens per model call |
+| `FACTORY_SPEC_STAGE` | `true` | run the read-only architect pass before coding |
+
+## Harness: skills and roles
+
+The pipeline runs one **role** per stage, and each role draws on reusable
+**skills**. See [`roles/README.md`](roles/README.md) and `.agents/skills/`.
+
+```
+Idea -> Build -> Coding -> Testing -> Staging -> Deploy -> Monitor
+ pm    architect  coder      qa       release   release    sre
+                                                            |
+       +------------- factory-labeled issue ---------------+
+```
+
+- Skills (`.agents/skills/`): `write-prd`, `implement-feature`, `ci-tests-audit`,
+  `qa-changes`, `deploy-staging`, `monitor-errors`.
+- Roles (`roles/`): `pm`, `architect`, `coder`, `qa`, `release`, `sre`.
+- Only `coder` edits source (in a worktree); only `release` deploys; no role runs
+  git - the engine owns commit/push/PR.
 
 ## Harness: skills and roles
 

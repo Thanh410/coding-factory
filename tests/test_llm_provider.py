@@ -337,6 +337,8 @@ def test_engine_ships_change_from_llm_backend(tmp_path, monkeypatch):
     monkeypatch.setenv("FACTORY_CHECKS", "test -f generated.txt")
 
     script = [
+        # Spec pass: the architect returns a plan (no tools).
+        _final("PLAN:\n- create generated.txt"),
         _tool_call("write_file", {"path": "generated.txt", "content": "from the llm agent\n"}),
         _final("SUMMARY: created generated.txt"),
     ]

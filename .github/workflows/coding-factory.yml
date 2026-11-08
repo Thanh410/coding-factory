@@ -53,6 +53,8 @@ jobs:
       # enable it. It only merges after this repo's CI checks report success.
       FACTORY_AUTO_MERGE: ${{ vars.FACTORY_AUTO_MERGE || 'false' }}
       FACTORY_MERGE_METHOD: ${{ vars.FACTORY_MERGE_METHOD || 'squash' }}
+      # Spec stage: a read-only architect pass plans before coding. On by default.
+      FACTORY_SPEC_STAGE: ${{ vars.FACTORY_SPEC_STAGE || 'true' }}
       # Prefer a PAT/App token so the PR's own CI runs (see note above); fall
       # back to the default token when it is not configured.
       GITHUB_TOKEN: ${{ secrets.FACTORY_GH_TOKEN || secrets.GITHUB_TOKEN }}

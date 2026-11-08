@@ -33,6 +33,8 @@ class Task:
     pr_number: int = 0
     merged: bool = False
     detail: str = ""
+    # Plan produced by the spec stage (architect pass); empty when disabled.
+    spec: str = ""
 
     @property
     def slug(self) -> str:

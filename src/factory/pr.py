@@ -86,6 +86,14 @@ def pr_body(task: Task, *, checks_summary: str, agent_summary: str, diff_stat: s
         "## Agent summary",
         agent_summary.strip() or "_none provided_",
         "",
+    ]
+    if task.spec.strip():
+        lines += [
+            "## Plan (spec stage)",
+            task.spec.strip(),
+            "",
+        ]
+    lines += [
         "## Verification",
         "```",
         checks_summary.strip() or "no checks configured",
