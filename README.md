@@ -150,4 +150,21 @@ python -m pytest -q
 python -m ruff check src tests
 ```
 
+## Evals: golden-task pass-rate
+
+A fixed set of tasks measures whether the pipeline actually works, so you can
+tell an improvement from a regression.
+
+```bash
+factory eval --backend llm                       # run evals/cases, print a report
+factory eval --backend llm --json                # machine-readable
+factory eval --backend llm --min-pass-rate 0.8   # exit 1 below 80% (CI gate)
+```
+
+Each case runs the **real engine** against a throwaway git repo seeded with the
+case's files; PR creation is stubbed, so no GitHub auth is needed. Cases live in
+`evals/cases/` — see `evals/README.md` for the schema. The weekly `evals`
+workflow runs the suite; set the `FACTORY_EVAL_MIN_PASS_RATE` repository variable
+to gate merges on it.
+
 _Automation built with OpenHands._
