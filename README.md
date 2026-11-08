@@ -6,10 +6,14 @@ backends: OpenAI Codex (default), Google Antigravity, and a built-in `llm`
 backend with a provider fallback chain (OpenRouter, Gemini, or a local Ollama).
 
 ```
-task source -> SQLite queue -> agent (Codex/Antigravity/llm) -> checks -> commit -> push -> PR -> [wait for CI -> auto-merge]
-                    ^                                                        |
-                    +----------------- repair loop ---------------------------+
+task source -> SQLite queue -> spec pass (architect, read-only) -> agent (Codex/Antigravity/llm) -> checks -> commit -> push -> PR -> [wait for CI -> auto-merge]
+                    ^                                                                              |
+                    +------------------------------ repair loop ------------------------------------+
 ```
+
+The **spec pass** is a read-only planning step: the agent reads the code and
+returns a plan, which is handed to the coding agent. It is on by default and can
+be turned off with `FACTORY_SPEC_STAGE=false`.
 
 ## Why it is built this way
 
@@ -142,6 +146,25 @@ Ollama listens on `127.0.0.1:11434` by default. To reach it from another machine
 | `OLLAMA_BASE_URL` | `http://127.0.0.1:11434/v1` | Ollama endpoint |
 | `FACTORY_LLM_MAX_STEPS` | `30` | max tool-call rounds per run |
 | `FACTORY_LLM_MAX_TOKENS` | `4096` | max tokens per model call |
+| `FACTORY_SPEC_STAGE` | `true` | run the read-only architect pass before coding |
+
+## Harness: skills and roles
+
+The pipeline runs one **role** per stage, and each role draws on reusable
+**skills**. See [`roles/README.md`](roles/README.md) and `.agents/skills/`.
+
+```
+Idea -> Build -> Coding -> Testing -> Staging -> Deploy -> Monitor
+ pm    architect  coder      qa       release   release    sre
+                                                            |
+       +------------- factory-labeled issue ---------------+
+```
+
+- Skills (`.agents/skills/`): `write-prd`, `implement-feature`, `ci-tests-audit`,
+  `qa-changes`, `deploy-staging`, `monitor-errors`.
+- Roles (`roles/`): `pm`, `architect`, `coder`, `qa`, `release`, `sre`.
+- Only `coder` edits source (in a worktree); only `release` deploys; no role runs
+  git - the engine owns commit/push/PR.
 
 ## Tests
 
@@ -166,5 +189,31 @@ case's files; PR creation is stubbed, so no GitHub auth is needed. Cases live in
 `evals/cases/` — see `evals/README.md` for the schema. The weekly `evals`
 workflow runs the suite; set the `FACTORY_EVAL_MIN_PASS_RATE` repository variable
 to gate merges on it.
+
+## Deployment: staging and production
+
+Three workflows ship a change once it is on `main`:
+
+- `.github/workflows/deploy-staging.yml` — deploys a Vercel **preview** on every
+  push to `main`, aliases it to `STAGING_URL`, and smoke-tests the URL. Setup is
+  in `deploy/vercel/README.md`.
+- `.github/workflows/deploy-prod.yml` — deploys to **production**, bound to the
+  `production` GitHub Environment, so it **waits for a required reviewer** before
+  shipping. Setup is in `deploy/vercel/PRODUCTION.md`.
+- `.github/workflows/rollback-prod.yml` — reverts production to a previous
+  deployment, gated by the same environment.
+
+Staging is automatic; production is deliberate. Production also triggers from a
+`v*` release tag, or automatically after a successful staging deploy — but always
+behind the approval gate.
+
+Required for staging: the `VERCEL_TOKEN` secret and the `VERCEL_ORG_ID` /
+`VERCEL_PROJECT_ID` variables. Optional: `STAGING_URL`, `STAGING_SMOKE_PATH`.
+Production adds a `production` Environment with required reviewers and a
+`PROD_URL` variable.
+
+> A Vercel token can deploy to every project the account can reach. If it ever
+> leaks, revoke it and re-issue it — see `deploy/vercel/README.md`. Keep the
+> production token separate from staging.
 
 _Automation built with OpenHands._
