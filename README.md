@@ -143,6 +143,24 @@ Ollama listens on `127.0.0.1:11434` by default. To reach it from another machine
 | `FACTORY_LLM_MAX_STEPS` | `30` | max tool-call rounds per run |
 | `FACTORY_LLM_MAX_TOKENS` | `4096` | max tokens per model call |
 
+## Harness: skills and roles
+
+The pipeline runs one **role** per stage, and each role draws on reusable
+**skills**. See [`roles/README.md`](roles/README.md) and `.agents/skills/`.
+
+```
+Idea -> Build -> Coding -> Testing -> Staging -> Deploy -> Monitor
+ pm    architect  coder      qa       release   release    sre
+                                                            |
+       +------------- factory-labeled issue ---------------+
+```
+
+- Skills (`.agents/skills/`): `write-prd`, `implement-feature`, `ci-tests-audit`,
+  `qa-changes`, `deploy-staging`, `monitor-errors`.
+- Roles (`roles/`): `pm`, `architect`, `coder`, `qa`, `release`, `sre`.
+- Only `coder` edits source (in a worktree); only `release` deploys; no role runs
+  git - the engine owns commit/push/PR.
+
 ## Tests
 
 ```bash

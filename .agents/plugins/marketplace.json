@@ -1,0 +1,20 @@
+{
+  "name": "coding-factory-harness",
+  "interface": {
+    "displayName": "Coding Factory Harness"
+  },
+  "plugins": [
+    {
+      "name": "coding-factory-harness",
+      "source": {
+        "source": "local",
+        "path": "."
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Developer Tools"
+    }
+  ]
+}
