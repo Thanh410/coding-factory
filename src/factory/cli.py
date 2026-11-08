@@ -58,6 +58,10 @@ def build_parser() -> argparse.ArgumentParser:
 
     sub.add_parser("backends", help="list available agent backends")
     sub.add_parser("models", help="list curated free models (and their availability)")
+
+    mon = sub.add_parser("monitor", help="poll Sentry/uptime and open factory issues")
+    _common(mon)
+    mon.add_argument("--dry-run", action="store_true", help="print what would be opened")
     return p
 
 
@@ -146,6 +150,24 @@ def _default_backend() -> str:
     return os.environ.get("FACTORY_BACKEND", "codex")
 
 
+def cmd_monitor(args: argparse.Namespace) -> int:
+    """Poll Sentry and uptime, then open GitHub issues for what is new."""
+    from . import monitor as monitor_mod
+
+    cfg = monitor_mod.MonitorConfig.from_env()
+    if not cfg.sentry_enabled and not cfg.uptime_enabled:
+        print("no monitors configured (set SENTRY_AUTH_TOKEN/ORG/PROJECT or UPTIME_URL)")
+        return 2
+
+    created = monitor_mod.run_monitor(cfg, dry_run=args.dry_run)
+    if not created:
+        print("nothing new to report")
+        return 0
+    for item in created:
+        print(item)
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     _setup_logging(getattr(args, "verbose", False))
@@ -156,6 +178,7 @@ def main(argv: list[str] | None = None) -> int:
         "enqueue": cmd_enqueue,
         "backends": cmd_backends,
         "models": cmd_models,
+        "monitor": cmd_monitor,
     }
     return handlers[args.cmd](args)
 
