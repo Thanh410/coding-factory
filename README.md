@@ -118,8 +118,8 @@ coding-focused models first, e.g. `nvidia/nemotron-3-ultra-550b-a55b:free`,
 ### Ollama (self-hosted, free, no API key)
 
 ```bash
-./deploy/ollama/setup-ollama.sh                          # install + pull qwen2.5:3b
-MODEL=qwen2.5-coder:7b ./deploy/ollama/setup-ollama.sh   # a different model
+bash deploy/ollama/setup-ollama.sh                          # install + pull qwen2.5:3b
+MODEL=qwen2.5-coder:7b bash deploy/ollama/setup-ollama.sh   # a different model
 
 export FACTORY_BACKEND=llm
 export FACTORY_LLM_CHAIN=ollama
