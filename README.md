@@ -150,4 +150,20 @@ python -m pytest -q
 python -m ruff check src tests
 ```
 
+## Deployment: staging and production
+
+Two workflows ship a change once it is on `main`:
+
+- `.github/workflows/deploy-staging.yml` — deploys a Vercel **preview** on every
+  push to `main`, aliases it to `STAGING_URL`, and smoke-tests the URL. Setup is
+  in `deploy/vercel/README.md`.
+- `.github/workflows/deploy-prod.yml` — deploys to **production**, gated by a
+  GitHub Environment approval (P3).
+
+Required for staging: the `VERCEL_TOKEN` secret and the `VERCEL_ORG_ID` /
+`VERCEL_PROJECT_ID` variables. Optional: `STAGING_URL`, `STAGING_SMOKE_PATH`.
+
+> A Vercel token can deploy to every project the account can reach. If it ever
+> leaks, revoke it and re-issue it — see `deploy/vercel/README.md`.
+
 _Automation built with OpenHands._
