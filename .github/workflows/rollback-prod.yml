@@ -1,0 +1,82 @@
+name: rollback-prod
+
+# Roll production back to a previous deployment. Gated by the same `production`
+# GitHub Environment, so a human approves the rollback too.
+#
+# With no input, `vercel rollback` reverts to the previous production deployment.
+# With `to` set (a deployment URL or id), `vercel promote` makes that deployment
+# the current production one.
+#
+# Required repo secrets:
+#   VERCEL_TOKEN
+# Required repo variables:
+#   VERCEL_ORG_ID
+#   VERCEL_PROJECT_ID
+#   PROD_URL           - production URL to smoke-test after rollback
+# Optional:
+#   PROD_SMOKE_PATH    - default "/"
+
+on:
+  workflow_dispatch:
+    inputs:
+      to:
+        description: "Deployment URL/id to promote (blank = previous production deployment)"
+        default: ""
+        required: false
+
+concurrency:
+  group: deploy-prod
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  rollback:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment:
+      name: production
+      url: ${{ vars.PROD_URL }}
+    env:
+      VERCEL_ORG_ID: ${{ vars.VERCEL_ORG_ID }}
+      VERCEL_PROJECT_ID: ${{ vars.VERCEL_PROJECT_ID }}
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+
+    steps:
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install Vercel CLI
+        run: npm install --global vercel@latest
+
+      - name: Roll back
+        run: |
+          if [ -n "${{ github.event.inputs.to }}" ]; then
+            echo "Promoting ${{ github.event.inputs.to }}"
+            vercel promote "${{ github.event.inputs.to }}" --yes --token="$VERCEL_TOKEN"
+          else
+            echo "Rolling back to the previous production deployment"
+            vercel rollback --yes --token="$VERCEL_TOKEN"
+          fi
+
+      - name: Smoke test production
+        run: |
+          base="${{ vars.PROD_URL }}"
+          path="${{ vars.PROD_SMOKE_PATH || '/' }}"
+          if [ -z "$base" ]; then
+            echo "PROD_URL not set; skipping smoke test"
+            exit 0
+          fi
+          echo "Smoke-testing $base$path"
+          for i in 1 2 3 4 5 6; do
+            code="$(curl -s -o /dev/null -w '%{http_code}' -L "$base$path")"
+            echo "attempt $i: HTTP $code"
+            if [ "$code" = "200" ]; then exit 0; fi
+            sleep 10
+          done
+          echo "::error::production smoke test failed after rollback (last HTTP $code)"
+          exit 1
