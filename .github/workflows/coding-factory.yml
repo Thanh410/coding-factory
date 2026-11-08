@@ -46,7 +46,9 @@ jobs:
       FACTORY_TRIGGER_LABEL: factory
       FACTORY_BASE_BRANCH: ${{ github.event.repository.default_branch }}
       FACTORY_REPO: ${{ github.workspace }}
-      FACTORY_WORK_ROOT: ${{ runner.temp }}/factory
+      # Note: the `runner` context is not available in a job-level env block, so
+      # this is a literal path (on the runner's disk) rather than ${{ runner.temp }}.
+      FACTORY_WORK_ROOT: /tmp/factory
       # Auto-merge is opt-in. Set repository variable FACTORY_AUTO_MERGE=true to
       # enable it. It only merges after this repo's CI checks report success.
       FACTORY_AUTO_MERGE: ${{ vars.FACTORY_AUTO_MERGE || 'false' }}
