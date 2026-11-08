@@ -56,6 +56,9 @@ lifecycle of such an app, not just "open a PR".
 - `src/factory/eval.py`    - golden-task harness: `factory eval` runs cases from
   `evals/cases/` through the real engine (PR stubbed) and reports a pass-rate.
   Case schema is in `evals/README.md`. Keep cases small and deterministic.
+- `src/factory/dashboard.py` - renders the eval history as a static HTML page
+  (`factory dashboard`); `--record` on `factory eval` appends a run to the
+  history. Stdlib only, inline SVG, no CDN. Published to GitHub Pages.
 - `src/factory/monitor.py` - production monitors: poll Sentry + an uptime URL and
   open `factory` issues for anything new (dedup by a marker in the issue body).
   Closes the loop: production error -> issue -> fix -> PR. `factory monitor`.
@@ -86,6 +89,8 @@ lifecycle of such an app, not just "open a PR".
   stands in for Sentry and the GitHub API.
 - Eval tests (`tests/test_eval.py`) build a throwaway git repo and run the real
   engine with a fake adapter; PR creation is stubbed, so no network.
+- Dashboard tests (`tests/test_dashboard.py`) use a fake eval report and assert
+  on the rendered HTML; no browser or network.
 
 ## Cleanup and maintainability
 - Fix the producing boundary before adding downstream repairs; normalize once at
