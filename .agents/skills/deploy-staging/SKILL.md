@@ -1,51 +1,42 @@
 ---
 name: deploy-staging
-description: Deploy a change to a free staging environment (Vercel preview) and verify it end to end before production. Use to stand up a preview URL for a PR, run smoke tests against it, or gate promotion to production.
+description: Deploy the current revision to a staging (preview) environment and smoke-test it. Use when shipping to staging, validating a change end to end before production, or when the staging deploy or its smoke test failed.
 ---
 
-# Deploy to staging (Vercel preview)
+# Deploy to staging
 
-Staging is a real, reachable copy of the change on a preview URL. A change is
-staging-ready when the preview builds, the app loads, and the primary flows work
-against it.
+Ship the revision to staging, prove it is reachable, then stop. Production is a
+separate, approval-gated step.
 
-## 1. Build the preview
+## Procedure
 
-- Vercel builds a preview deployment for every push to a non-production branch.
-  Confirm the project is linked (`vercel link`) and the repo is connected.
-- If there is no Git integration, deploy explicitly:
+1. Confirm the revision is on `main` (staging deploys from `main`, never a
+   feature branch) and CI is green.
+2. Trigger the deploy:
+   ```bash
+   gh workflow run deploy-staging.yml --repo <owner>/<repo>
+   gh run watch --repo <owner>/<repo>
+   ```
+3. The workflow deploys a Vercel preview, aliases it to `STAGING_URL` if set,
+   and smoke-tests `STAGING_SMOKE_PATH` (default `/`).
+4. Read the deploy URL from the run summary / environment. That is the artifact
+   to hand to QA.
 
-  ```bash
-  vercel            # preview deployment for the current branch
-  vercel --prod     # production - only after staging passes
-  ```
+## Rules
 
-- Required environment variables for the preview (AI provider keys, database
-  URL) live in the Vercel project's Preview environment, not in the repo.
+- **Never deploy to production from here.** Production is `deploy-prod.yml` and
+  requires an Environment approval.
+- **A failed smoke test is a failed deploy.** Do not hand over a URL that did
+  not return `200`; fix forward or roll back.
+- **Rotate the token if it leaks.** `VERCEL_TOKEN` is a secret; if it appears in
+  any log, chat, or issue, revoke and re-issue it (see `deploy/vercel/README.md`).
+- **Keep staging and production separate.** They must not share a token scope or
+  a project alias.
 
-## 2. Access a protected preview
+## When the deploy fails
 
-Preview deployments may have Deployment Protection enabled, which blocks
-automated checks. If a preview URL redirects to login or returns 401/403:
-
-- Ask the owner to create a **Protection Bypass for Automation** secret
-  (Settings -> Deployment Protection) and pass it as:
-  `curl -H "x-vercel-protection-bypass: $VERCEL_BYPASS" https://<preview-url>`
-- Or, for browser checks, append `?x-vercel-protection-bypass=<secret>` once.
-- Do not repeatedly retry a protected URL without the bypass secret.
-
-## 3. Smoke test the preview
-
-Against the preview URL:
-
-- Load the changed routes; confirm 200 and no console errors.
-- Exercise the primary user flow and the AI assistant flow (real prompt,
-  streaming, error state).
-- Check a cold start and one error path.
-- Verify the preview uses preview env vars, not production secrets.
-
-## Deliver
-
-Return the preview URL, the smoke-test results per flow, and any failure with
-steps to reproduce. Promote to production only after staging is green and the
-change is approved.
+- `vercel pull`/`build` errors: usually a missing `VERCEL_ORG_ID` /
+  `VERCEL_PROJECT_ID` variable, or a build error in the app itself.
+- Auth errors: the `VERCEL_TOKEN` secret is missing, expired, or revoked.
+- Smoke test fails: the app deployed but is unhealthy — check the deployment
+  logs at the preview URL, then the app's runtime logs.
