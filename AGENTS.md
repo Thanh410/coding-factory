@@ -32,6 +32,9 @@ backend) inside an isolated git worktree.
 - `src/factory/runner.py`  - continuous loop + one-shot runner.
 - `src/factory/state.py`   - SQLite queue (durable, dedupes by external_id).
 - `src/factory/checks.py`  - convention-based check discovery; override with `FACTORY_CHECKS`.
+- `src/factory/eval.py`    - golden-task harness: `factory eval` runs cases from
+  `evals/cases/` through the real engine (PR stubbed) and reports a pass-rate.
+  Case schema is in `evals/README.md`. Keep cases small and deterministic.
 - `deploy/`, `.github/workflows/` - 24/7 deployment targets (systemd, cron, Actions).
 
 ## Testing notes

@@ -58,6 +58,19 @@ def build_parser() -> argparse.ArgumentParser:
 
     sub.add_parser("backends", help="list available agent backends")
     sub.add_parser("models", help="list curated free models (and their availability)")
+
+    ev = sub.add_parser("eval", help="run golden tasks through the pipeline and report pass-rate")
+    _common(ev)
+    ev.add_argument(
+        "--suite", default="evals/cases", help="suite dir of *.json cases, or one JSON file"
+    )
+    ev.add_argument("--json", action="store_true", help="emit a machine-readable report")
+    ev.add_argument(
+        "--min-pass-rate",
+        type=float,
+        default=0.0,
+        help="exit non-zero when the pass-rate is below this (0..1)",
+    )
     return p
 
 
@@ -146,6 +159,33 @@ def _default_backend() -> str:
     return os.environ.get("FACTORY_BACKEND", "codex")
 
 
+def cmd_eval(args: argparse.Namespace) -> int:
+    """Run the golden-task suite and report the pass-rate."""
+    from pathlib import Path
+
+    from . import eval as eval_mod
+
+    backend = args.backend or _default_backend()
+    try:
+        cases = eval_mod.load_suite(Path(args.suite))
+    except FileNotFoundError as exc:
+        print(str(exc))
+        return 2
+    if not cases:
+        print(f"no cases found in {args.suite}")
+        return 2
+
+    result = eval_mod.run_suite(cases, backend)
+    if args.json:
+        print(json.dumps(eval_mod.as_dict(result), indent=2, sort_keys=True))
+    else:
+        print(eval_mod.format_report(result))
+    if result.pass_rate < args.min_pass_rate:
+        print(f"pass-rate {result.pass_rate:.0%} is below the required {args.min_pass_rate:.0%}")
+        return 1
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     _setup_logging(getattr(args, "verbose", False))
@@ -156,6 +196,7 @@ def main(argv: list[str] | None = None) -> int:
         "enqueue": cmd_enqueue,
         "backends": cmd_backends,
         "models": cmd_models,
+        "eval": cmd_eval,
     }
     return handlers[args.cmd](args)
 
