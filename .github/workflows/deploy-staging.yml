@@ -1,0 +1,82 @@
+name: deploy-staging
+
+# Deploy to a Vercel *preview* (staging) on every push to main, then smoke-test
+# the deployment URL. Never touches production - that is deploy-prod.yml.
+#
+# Required repo secrets:
+#   VERCEL_TOKEN       - a Vercel token (rotate it; never commit it)
+# Required repo variables:
+#   VERCEL_ORG_ID      - e.g. team_xxx
+#   VERCEL_PROJECT_ID  - the Vercel project id or name
+# Optional:
+#   STAGING_URL        - a stable URL to alias this deployment to (e.g.
+#                        https://my-app-staging.vercel.app)
+#   STAGING_SMOKE_PATH - path the smoke test hits (default "/")
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-staging
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment:
+      name: staging
+      url: ${{ steps.deploy.outputs.url }}
+    env:
+      VERCEL_ORG_ID: ${{ vars.VERCEL_ORG_ID }}
+      VERCEL_PROJECT_ID: ${{ vars.VERCEL_PROJECT_ID }}
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install Vercel CLI
+        run: npm install --global vercel@latest
+
+      - name: Pull Vercel environment (preview)
+        run: vercel pull --yes --environment=preview --token="$VERCEL_TOKEN"
+
+      - name: Build
+        run: vercel build --token="$VERCEL_TOKEN"
+
+      - name: Deploy to staging (preview)
+        id: deploy
+        run: |
+          url="$(vercel deploy --prebuilt --token="$VERCEL_TOKEN")"
+          echo "url=$url" >> "$GITHUB_OUTPUT"
+          echo "Deployed preview: $url"
+
+      - name: Alias to the stable staging URL
+        if: ${{ vars.STAGING_URL != '' }}
+        run: vercel alias set "${{ steps.deploy.outputs.url }}" "${{ vars.STAGING_URL }}" --token="$VERCEL_TOKEN"
+
+      - name: Smoke test
+        run: |
+          base="${{ vars.STAGING_URL || steps.deploy.outputs.url }}"
+          path="${{ vars.STAGING_SMOKE_PATH || '/' }}"
+          echo "Smoke-testing $base$path"
+          for i in 1 2 3 4 5; do
+            code="$(curl -s -o /dev/null -w '%{http_code}' -L "$base$path")"
+            echo "attempt $i: HTTP $code"
+            if [ "$code" = "200" ]; then exit 0; fi
+            sleep 5
+          done
+          echo "::error::staging smoke test failed (last HTTP $code)"
+          exit 1
