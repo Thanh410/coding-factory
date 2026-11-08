@@ -53,6 +53,12 @@ lifecycle of such an app, not just "open a PR".
 - `src/factory/runner.py`  - continuous loop + one-shot runner.
 - `src/factory/state.py`   - SQLite queue (durable, dedupes by external_id).
 - `src/factory/checks.py`  - convention-based check discovery; override with `FACTORY_CHECKS`.
+- `src/factory/eval.py`    - golden-task harness: `factory eval` runs cases from
+  `evals/cases/` through the real engine (PR stubbed) and reports a pass-rate.
+  Case schema is in `evals/README.md`. Keep cases small and deterministic.
+- `src/factory/monitor.py` - production monitors: poll Sentry + an uptime URL and
+  open `factory` issues for anything new (dedup by a marker in the issue body).
+  Closes the loop: production error -> issue -> fix -> PR. `factory monitor`.
 - `.agents/skills/`        - reusable skills (progressive disclosure; see below).
 - `roles/`                 - bounded agents, one per pipeline stage.
 - `deploy/`, `.github/workflows/` - 24/7 deployment targets (systemd, cron, Actions).
@@ -76,6 +82,10 @@ lifecycle of such an app, not just "open a PR".
 - LLM-provider tests (`tests/test_llm_provider.py`) start a real local HTTP server
   that speaks the OpenAI chat-completions protocol, so the client path is exercised
   end to end without any network or API key.
+- Monitor tests (`tests/test_monitor.py`) likewise run a local HTTP server that
+  stands in for Sentry and the GitHub API.
+- Eval tests (`tests/test_eval.py`) build a throwaway git repo and run the real
+  engine with a fake adapter; PR creation is stubbed, so no network.
 
 ## Cleanup and maintainability
 - Fix the producing boundary before adding downstream repairs; normalize once at
