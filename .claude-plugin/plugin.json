@@ -1,0 +1,25 @@
+{
+  "name": "coding-factory-harness",
+  "version": "0.1.0",
+  "description": "Skills and roles for the coding-factory harness: implement, audit, QA, stage, and monitor AI-assisted web apps.",
+  "author": {
+    "name": "Thanh410",
+    "url": "https://github.com/Thanh410"
+  },
+  "repository": "https://github.com/Thanh410/coding-factory",
+  "license": "MIT",
+  "keywords": ["agent-skills", "harness", "coding-factory", "codex", "vercel"],
+  "skills": "./.agents/skills",
+  "interface": {
+    "displayName": "Coding Factory Harness",
+    "shortDescription": "Skills and roles for the coding-factory pipeline",
+    "developerName": "Thanh410",
+    "category": "Developer Tools",
+    "capabilities": ["Read", "Write"],
+    "defaultPrompt": [
+      "Implement this task and make the project's checks pass.",
+      "Audit this CI workflow and test suite for false passes.",
+      "QA this change in the running app before staging."
+    ]
+  }
+}
