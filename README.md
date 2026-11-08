@@ -166,30 +166,50 @@ Idea -> Build -> Coding -> Testing -> Staging -> Deploy -> Monitor
 - Only `coder` edits source (in a worktree); only `release` deploys; no role runs
   git - the engine owns commit/push/PR.
 
-## Harness: skills and roles
-
-The pipeline runs one **role** per stage, and each role draws on reusable
-**skills**. See [`roles/README.md`](roles/README.md) and `.agents/skills/`.
-
-```
-Idea -> Build -> Coding -> Testing -> Staging -> Deploy -> Monitor
- pm    architect  coder      qa       release   release    sre
-                                                            |
-       +------------- factory-labeled issue ---------------+
-```
-
-- Skills (`.agents/skills/`): `write-prd`, `implement-feature`, `ci-tests-audit`,
-  `qa-changes`, `deploy-staging`, `monitor-errors`.
-- Roles (`roles/`): `pm`, `architect`, `coder`, `qa`, `release`, `sre`.
-- Only `coder` edits source (in a worktree); only `release` deploys; no role runs
-  git - the engine owns commit/push/PR.
-
 ## Tests
 
 ```bash
 python -m pytest -q
 python -m ruff check src tests
 ```
+
+## Evals: golden-task pass-rate
+
+A fixed set of tasks measures whether the pipeline actually works, so you can
+tell an improvement from a regression.
+
+```bash
+factory eval --backend llm                       # run evals/cases, print a report
+factory eval --backend llm --json                # machine-readable
+factory eval --backend llm --min-pass-rate 0.8   # exit 1 below 80% (CI gate)
+```
+
+Each case runs the **real engine** against a throwaway git repo seeded with the
+case's files; PR creation is stubbed, so no GitHub auth is needed. Cases live in
+`evals/cases/` — see `evals/README.md` for the schema. The weekly `evals`
+workflow runs the suite; set the `FACTORY_EVAL_MIN_PASS_RATE` repository variable
+to gate merges on it.
+
+## Monitoring: errors and uptime become issues
+
+`monitor.yml` polls production every 30 minutes and opens a `factory`-labeled
+issue for each **new** Sentry error or uptime failure. The factory then picks
+those issues up like any other task, closing the loop:
+
+```text
+Sentry error / uptime failure ──▶ issue (label: factory) ──▶ agent fix ──▶ PR
+```
+
+```bash
+export SENTRY_AUTH_TOKEN=... SENTRY_ORG=acme SENTRY_PROJECT=web   # Sentry
+export UPTIME_URL=https://app.example.com/health                 # uptime
+factory monitor --dry-run     # print what would be opened
+factory monitor               # open the issues
+```
+
+Dedup is by a marker in the issue body, so a recurring error does not open a new
+issue every run; closing the issue lets a still-broken signal reopen it. Setup is
+in `deploy/monitoring/README.md`.
 
 ## Deployment: staging and production
 

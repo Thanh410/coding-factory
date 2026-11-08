@@ -1,0 +1,10 @@
+{
+  "id": "must-block",
+  "title": "Impossible task blocks cleanly",
+  "body": "This task cannot be satisfied: do not modify any file.",
+  "checks": "false",
+  "max_repairs": 0,
+  "expect": {
+    "state": "blocked"
+  }
+}

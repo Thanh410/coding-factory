@@ -1,0 +1,10 @@
+{
+  "id": "add-file",
+  "title": "Create a module file",
+  "body": "Add a new file `created.py` at the repository root containing a single function `answer()` that returns 42.",
+  "checks": "test -f created.py && grep -q 'def answer' created.py",
+  "expect": {
+    "state": "pr_open",
+    "files_changed_contains": ["created.py"]
+  }
+}
