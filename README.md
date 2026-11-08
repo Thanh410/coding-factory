@@ -152,18 +152,28 @@ python -m ruff check src tests
 
 ## Deployment: staging and production
 
-Two workflows ship a change once it is on `main`:
+Three workflows ship a change once it is on `main`:
 
 - `.github/workflows/deploy-staging.yml` — deploys a Vercel **preview** on every
   push to `main`, aliases it to `STAGING_URL`, and smoke-tests the URL. Setup is
   in `deploy/vercel/README.md`.
-- `.github/workflows/deploy-prod.yml` — deploys to **production**, gated by a
-  GitHub Environment approval (P3).
+- `.github/workflows/deploy-prod.yml` — deploys to **production**, bound to the
+  `production` GitHub Environment, so it **waits for a required reviewer** before
+  shipping. Setup is in `deploy/vercel/PRODUCTION.md`.
+- `.github/workflows/rollback-prod.yml` — reverts production to a previous
+  deployment, gated by the same environment.
+
+Staging is automatic; production is deliberate. Production also triggers from a
+`v*` release tag, or automatically after a successful staging deploy — but always
+behind the approval gate.
 
 Required for staging: the `VERCEL_TOKEN` secret and the `VERCEL_ORG_ID` /
 `VERCEL_PROJECT_ID` variables. Optional: `STAGING_URL`, `STAGING_SMOKE_PATH`.
+Production adds a `production` Environment with required reviewers and a
+`PROD_URL` variable.
 
 > A Vercel token can deploy to every project the account can reach. If it ever
-> leaks, revoke it and re-issue it — see `deploy/vercel/README.md`.
+> leaks, revoke it and re-issue it — see `deploy/vercel/README.md`. Keep the
+> production token separate from staging.
 
 _Automation built with OpenHands._

@@ -1,0 +1,116 @@
+name: deploy-prod
+
+# Deploy to Vercel *production*. This job is bound to the `production` GitHub
+# Environment, so it PAUSES until a required reviewer approves it in the Actions
+# UI. That approval gate is the whole point: staging is automatic, production is
+# deliberate.
+#
+# Triggers:
+#   - manual (workflow_dispatch), optionally deploying a specific ref/SHA
+#   - a release tag (v*)
+#   - automatically after `deploy-staging` succeeds on main (still gated by the
+#     environment approval, so nothing ships unattended)
+#
+# Required repo secrets:
+#   VERCEL_TOKEN       - a Vercel token with production access
+# Required repo variables:
+#   VERCEL_ORG_ID      - e.g. team_xxx
+#   VERCEL_PROJECT_ID  - the Vercel project id
+#   PROD_URL           - the production URL to smoke-test (e.g. https://app.com)
+# Optional:
+#   PROD_SMOKE_PATH    - path the smoke test hits (default "/")
+
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: "Git ref or SHA to deploy"
+        default: "main"
+        required: true
+  push:
+    tags: ["v*"]
+  workflow_run:
+    workflows: ["deploy-staging"]
+    types: [completed]
+    branches: [main]
+
+concurrency:
+  group: deploy-prod
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  deploy:
+    # Never run from a failed staging deploy.
+    if: ${{ github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment:
+      name: production
+      url: ${{ vars.PROD_URL }}
+    env:
+      VERCEL_ORG_ID: ${{ vars.VERCEL_ORG_ID }}
+      VERCEL_PROJECT_ID: ${{ vars.VERCEL_PROJECT_ID }}
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.ref || github.event.workflow_run.head_sha || github.ref }}
+          fetch-depth: 0
+
+      - name: Record what is being deployed
+        run: |
+          echo "event: ${{ github.event_name }}"
+          echo "ref:   $(git rev-parse HEAD)"
+          git --no-pager log -1 --oneline
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install Vercel CLI
+        run: npm install --global vercel@latest
+
+      - name: Pull Vercel environment (production)
+        run: vercel pull --yes --environment=production --token="$VERCEL_TOKEN"
+
+      - name: Build
+        run: vercel build --prod --token="$VERCEL_TOKEN"
+
+      - name: Deploy to production
+        id: deploy
+        run: |
+          url="$(vercel deploy --prebuilt --prod --token="$VERCEL_TOKEN")"
+          echo "url=$url" >> "$GITHUB_OUTPUT"
+          echo "Deployed production: $url"
+
+      - name: Smoke test production
+        run: |
+          base="${{ vars.PROD_URL || steps.deploy.outputs.url }}"
+          path="${{ vars.PROD_SMOKE_PATH || '/' }}"
+          echo "Smoke-testing $base$path"
+          for i in 1 2 3 4 5 6; do
+            code="$(curl -s -o /dev/null -w '%{http_code}' -L "$base$path")"
+            echo "attempt $i: HTTP $code"
+            if [ "$code" = "200" ]; then exit 0; fi
+            sleep 10
+          done
+          echo "::error::production smoke test failed (last HTTP $code) - roll back with rollback-prod.yml"
+          exit 1
+
+      - name: Summary
+        if: always()
+        run: |
+          {
+            echo "### Production deploy"
+            echo ""
+            echo "- ref: \`$(git rev-parse HEAD)\`"
+            echo "- url: ${{ vars.PROD_URL || steps.deploy.outputs.url }}"
+            echo "- smoke test: ${{ job.status }}"
+          } >> "$GITHUB_STEP_SUMMARY"
