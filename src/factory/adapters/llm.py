@@ -23,12 +23,12 @@ Selection: pick this backend with ``--backend llm`` or ``FACTORY_BACKEND=llm``.
 from __future__ import annotations
 
 import json
-import os
 import urllib.error
 import urllib.request
 from pathlib import Path
 from typing import Any
 
+from ..config import int_env
 from ..models import AgentResult, Task
 from ..providers import ResolvedProvider, resolve_chain
 from .base import AgentAdapter, register
@@ -128,7 +128,7 @@ class LLMAdapter(AgentAdapter):
                 exit_code=127,
             )
 
-        max_steps = int(os.environ.get("FACTORY_LLM_MAX_STEPS", "30"))
+        max_steps = int_env("FACTORY_LLM_MAX_STEPS", 30)
         errors: list[str] = []
         transcript: list[str] = []
 
@@ -164,8 +164,8 @@ class LLMAdapter(AgentAdapter):
             {"role": "system", "content": _SYSTEM_HINT},
             {"role": "user", "content": prompt},
         ]
-        max_tokens = int(os.environ.get("FACTORY_LLM_MAX_TOKENS", "4096"))
-        timeout = int(os.environ.get("FACTORY_LLM_TIMEOUT", str(self.timeout)))
+        max_tokens = int_env("FACTORY_LLM_MAX_TOKENS", 4096)
+        timeout = int_env("FACTORY_LLM_TIMEOUT", self.timeout)
 
         for step in range(1, max_steps + 1):
             message = _chat(provider, messages, timeout, max_tokens)

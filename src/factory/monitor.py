@@ -19,6 +19,8 @@ import urllib.parse
 import urllib.request
 from dataclasses import dataclass, field
 
+from .config import int_env, str_env
+
 _MARKER = "<!-- factory-monitor:{key} -->"
 _MARKER_RE = re.compile(r"factory-monitor:(\S+?)\s*-->")
 _DEFAULT_API = "https://api.github.com"
@@ -62,17 +64,17 @@ class MonitorConfig:
         return cls(
             repo=os.environ.get("FACTORY_GITHUB_REPO", ""),
             token=os.environ.get("GITHUB_TOKEN") or os.environ.get("GH_TOKEN", ""),
-            label=os.environ.get("FACTORY_MONITOR_LABEL", "factory"),
-            sentry_base=os.environ.get("SENTRY_BASE_URL", "https://sentry.io").rstrip("/"),
+            label=str_env("FACTORY_MONITOR_LABEL", "factory"),
+            sentry_base=str_env("SENTRY_BASE_URL", "https://sentry.io").rstrip("/"),
             sentry_token=os.environ.get("SENTRY_AUTH_TOKEN", ""),
             sentry_org=os.environ.get("SENTRY_ORG", ""),
             sentry_project=os.environ.get("SENTRY_PROJECT", ""),
-            sentry_query=os.environ.get("SENTRY_QUERY", "is:unresolved"),
-            sentry_period=os.environ.get("SENTRY_STATS_PERIOD", "24h"),
-            sentry_limit=int(os.environ.get("SENTRY_LIMIT", "10")),
+            sentry_query=str_env("SENTRY_QUERY", "is:unresolved"),
+            sentry_period=str_env("SENTRY_STATS_PERIOD", "24h"),
+            sentry_limit=int_env("SENTRY_LIMIT", 10),
             uptime_url=os.environ.get("UPTIME_URL", ""),
-            uptime_expect=int(os.environ.get("UPTIME_EXPECT_STATUS", "200")),
-            uptime_timeout=int(os.environ.get("UPTIME_TIMEOUT", "10")),
+            uptime_expect=int_env("UPTIME_EXPECT_STATUS", 200),
+            uptime_timeout=int_env("UPTIME_TIMEOUT", 10),
             api_base=os.environ.get("GITHUB_API_URL", _DEFAULT_API).rstrip("/"),
         )
 
