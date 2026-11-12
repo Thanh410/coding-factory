@@ -44,9 +44,13 @@ def run_loop(
     interval: int = 60,
     max_tasks: int | None = None,
     stop_when_empty: bool = False,
-) -> int:
-    """Continuous worker. Never dies on a single task failure."""
-    processed = 0
+) -> list[Task]:
+    """Continuous worker. Never dies on a single task failure.
+
+    Returns every task it processed, so the caller can inspect the final states
+    (a task may end BLOCKED or FAILED even though the loop itself succeeded).
+    """
+    processed: list[Task] = []
     while True:
         try:
             ingest(store, source)
@@ -57,9 +61,8 @@ def run_loop(
                     break
                 time.sleep(interval)
                 continue
-            Engine(settings, store, backend).process(task)
-            processed += 1
-            if max_tasks is not None and processed >= max_tasks:
+            processed.append(Engine(settings, store, backend).process(task))
+            if max_tasks is not None and len(processed) >= max_tasks:
                 break
         except KeyboardInterrupt:
             log.info("interrupted; shutting down")
