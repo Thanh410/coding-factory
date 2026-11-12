@@ -9,7 +9,7 @@ import sys
 
 from .adapters import base as adapters
 from .config import Settings
-from .models import Task
+from .models import Task, TaskState
 from .runner import run_loop, run_once
 from .sources import build_source
 from .state import Store
@@ -123,7 +123,7 @@ def cmd_run_once(args: argparse.Namespace) -> int:
 def cmd_run_loop(args: argparse.Namespace) -> int:
     settings, store = _settings_and_store()
     backend = args.backend or _default_backend()
-    n = run_loop(
+    processed = run_loop(
         settings,
         store,
         build_source(args.source),
@@ -133,8 +133,17 @@ def cmd_run_loop(args: argparse.Namespace) -> int:
         stop_when_empty=args.stop_when_empty,
     )
     store.close()
-    print(f"processed {n} task(s)")
-    return 0
+    print(f"processed {len(processed)} task(s)")
+
+    # A run that processed nothing is idle, not a failure: the scheduled loop is
+    # expected to find an empty queue most of the time. But if a task reached a
+    # terminal *failure* state, surface it as a non-zero exit so CI turns red
+    # instead of reporting a silent green.
+    failed = [t for t in processed if t.state in (TaskState.BLOCKED, TaskState.FAILED)]
+    for task in failed:
+        first_line = task.detail.splitlines()[0] if task.detail else ""
+        print(f"FAILED {task.external_id}: {task.state.value} - {first_line}")
+    return 1 if failed else 0
 
 
 def cmd_status(args: argparse.Namespace) -> int:
