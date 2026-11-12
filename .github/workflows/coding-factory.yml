@@ -3,8 +3,14 @@ name: coding-factory
 # Scheduled + manual factory runs. Each run picks up pending tasks, has the
 # agent implement them in a worktree, verifies them, and opens PRs.
 #
-# Required repo secret:  OPENAI_API_KEY   (for the Codex backend)
-# For the `llm` backend, set OPENROUTER_API_KEY and/or GEMINI_API_KEY instead.
+# Default backend is `llm`: a thin OpenAI-compatible client that needs only an
+# API key (no CLI install, no interactive login, no sandbox setup), so the
+# scheduled run works out of the box. Set GEMINI_API_KEY (free tier) and/or
+# OPENROUTER_API_KEY.
+#
+# The `codex` backend is opt-in: pick it from the workflow_dispatch menu. It
+# installs the Codex CLI, which authenticates from OPENAI_API_KEY.
+#
 # The default GITHUB_TOKEN must have `contents: write` and `pull-requests: write`.
 #
 # IMPORTANT for auto-merge: GitHub does NOT run workflows triggered by PRs that
@@ -19,9 +25,9 @@ on:
     inputs:
       backend:
         description: "Agent backend"
-        default: "codex"
+        default: "llm"
         type: choice
-        options: [codex, antigravity, llm]
+        options: [llm, codex, antigravity]
       max_tasks:
         description: "Max tasks to process this run"
         default: "3"
@@ -40,7 +46,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 60
     env:
-      FACTORY_BACKEND: ${{ github.event.inputs.backend || 'codex' }}
+      FACTORY_BACKEND: ${{ github.event.inputs.backend || 'llm' }}
       FACTORY_SOURCE: github
       FACTORY_GITHUB_REPO: ${{ github.repository }}
       FACTORY_TRIGGER_LABEL: factory
@@ -99,7 +105,7 @@ jobs:
           fi
 
       - name: Install Codex CLI
-        if: ${{ (github.event.inputs.backend || 'codex') == 'codex' }}
+        if: ${{ (github.event.inputs.backend || 'llm') == 'codex' }}
         run: npm install -g @openai/codex
 
       - name: Run factory
