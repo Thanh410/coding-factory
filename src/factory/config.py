@@ -12,15 +12,25 @@ class ConfigError(RuntimeError):
 
 
 def _env(name: str, default: str | None = None, *, required: bool = False) -> str:
-    value = os.environ.get(name, default)
-    if required and not value:
-        raise ConfigError(f"missing required environment variable: {name}")
-    return value or ""
-
-
-def _int_env(name: str, default: int) -> int:
     raw = os.environ.get(name)
-    if not raw:
+    if raw is None or not raw.strip():
+        # CI passes "" for undeclared vars; treat blank like unset so a default
+        # (branch name, merge method, ...) is not silently erased.
+        if required:
+            raise ConfigError(f"missing required environment variable: {name}")
+        return default or ""
+    return raw
+
+
+def int_env(name: str, default: int) -> int:
+    """Read an integer env var, tolerating an unset OR empty value.
+
+    CI systems (GitHub Actions) pass ``""`` for an undeclared ``vars.*`` entry,
+    which ``int("")`` rejects; treat blank the same as unset so a missing optional
+    variable never crashes a run.
+    """
+    raw = os.environ.get(name)
+    if raw is None or not raw.strip():
         return default
     try:
         return int(raw)
@@ -28,9 +38,28 @@ def _int_env(name: str, default: int) -> int:
         raise ConfigError(f"{name} must be an integer, got {raw!r}") from exc
 
 
-def _bool_env(name: str, default: bool) -> bool:
+_int_env = int_env  # backwards-compatible private alias
+
+
+def str_env(name: str, default: str) -> str:
+    """Read a string env var, treating an unset OR empty value as the default.
+
+    Same rationale as :func:`int_env`: CI passes ``""`` for undeclared vars, and a
+    blank must fall back to the default rather than erase it (e.g. the Sentry base
+    URL or query).
+    """
     raw = os.environ.get(name)
-    if raw is None:
+    return default if raw is None or not raw.strip() else raw
+
+
+def _bool_env(name: str, default: bool) -> bool:
+    """Read a boolean env var, treating an unset OR empty value as the default.
+
+    CI passes ``""`` for undeclared ``vars.*``; blank must not silently flip a
+    default-on flag (e.g. the spec stage) to off.
+    """
+    raw = os.environ.get(name)
+    if raw is None or not raw.strip():
         return default
     return raw.strip().lower() in {"1", "true", "yes", "on"}
 
