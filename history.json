@@ -1,0 +1,23 @@
+[
+  {
+    "backend": "llm",
+    "cases": [
+      {
+        "id": "add-file",
+        "passed": false
+      },
+      {
+        "id": "fix-bug",
+        "passed": false
+      },
+      {
+        "id": "must-block",
+        "passed": true
+      }
+    ],
+    "pass_rate": 0.3333333333333333,
+    "passed": 1,
+    "timestamp": "2026-11-13T14:58:08Z",
+    "total": 3
+  }
+]
